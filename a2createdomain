@@ -1,0 +1,40 @@
+#!/bin/bash
+
+
+# Settings
+# Path to the letsencrypt-auto tool
+LE_TOOL=/opt/letsencrypt/letsencrypt-auto
+#LE_TOOL=/opt/letsencrypt/letsencrypt
+# Directory where the acme client puts the generated certs
+LE_OUTPUT=/etc/letsencrypt/live
+
+# Concat the requested domains
+DOMAINS=""
+for DOM in "$@"
+do
+    DOMAINS+=" -d $DOM"
+    cp /etc/apache2/sites-available/example.com.conf /etc/apache2/sites-available/$DOM.conf \
+    && mkdir -p /var/www/$DOM \
+    && sed -i "s/example.com/$DOM/g" /etc/apache2/sites-available/$DOM.conf \
+    && chown -hR www-data:www-data /var/www \
+    && a2ensite $DOM
+    systemctl reload apache2
+    #CREATE USER 'newuser'@'localhost' IDENTIFIED BY 'password';
+    #CREATE DATABASE $DB;
+    #GRANT ALL PRIVILEGES ON $DB.* TO '$DB_USER'@'%' WITH GRANT OPTION;
+    #FLUSH PRIVILEGES;
+    $LE_TOOL certonly --webroot --webroot-path /var/www/$DOM --renew-by-default --email admin@$DOM --text --agree-tos -d $DOM
+    cp /etc/apache2/sites-available/example.com-le-ssl.conf /etc/apache2/sites-available/${DOM}-le-ssl.conf
+    sed -i "s/example.com/$DOM/g" /etc/apache2/sites-available/${DOM}-le-ssl.conf 
+    a2ensite $DOM-le-ssl.conf
+done
+
+# Create or renew certificate for the domain(s) supplied for this tool
+#$LE_TOOL --agree-tos --renew-by-default --standalone --standalone-supported-challenges http-01 --http-01-port 9999 certonly $DOMAINS
+
+
+# Cat the certificate chain and the private key together for haproxy
+# cat $LE_OUTPUT/$1/{fullchain.pem,privkey.pem} > /etc/haproxy/ssl/${1}.pem
+
+# Reload the haproxy daemon to activate the cert
+systemctl reload apache2
